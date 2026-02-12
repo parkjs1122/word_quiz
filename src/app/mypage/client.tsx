@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter } from "next/navigation";
 import WordUpload from "@/components/words/WordUpload";
 import WordTable from "@/components/words/WordTable";
 import FolderList from "@/components/words/FolderList";
@@ -38,17 +38,6 @@ export default function MyPageClient({
   selectedFolderId,
 }: MyPageClientProps) {
   const router = useRouter();
-  const pathname = usePathname();
-
-  function handleSelectFolder(folderId: string | null | undefined) {
-    if (folderId === undefined) {
-      router.replace(pathname);
-    } else if (folderId === null) {
-      router.replace(`${pathname}?folder=uncategorized`);
-    } else {
-      router.replace(`${pathname}?folder=${folderId}`);
-    }
-  }
 
   function handleRefresh() {
     router.refresh();
@@ -106,7 +95,6 @@ export default function MyPageClient({
             totalWordCount={totalWordCount}
             uncategorizedCount={uncategorizedCount}
             selectedFolderId={selectedFolderId}
-            onSelectFolder={handleSelectFolder}
             onFoldersChange={handleRefresh}
           />
         </div>

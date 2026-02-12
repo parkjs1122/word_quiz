@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { createFolder, renameFolder, deleteFolder } from "@/actions/folders";
 
 interface Folder {
@@ -15,7 +17,6 @@ interface FolderListProps {
   uncategorizedCount: number;
   // selectedFolderId: undefined = all, null = uncategorized, string = specific folder
   selectedFolderId: string | null | undefined;
-  onSelectFolder: (folderId: string | null | undefined) => void;
   onFoldersChange: () => void;
 }
 
@@ -24,9 +25,9 @@ export default function FolderList({
   totalWordCount,
   uncategorizedCount,
   selectedFolderId,
-  onSelectFolder,
   onFoldersChange,
 }: FolderListProps) {
+  const router = useRouter();
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -63,13 +64,13 @@ export default function FolderList({
       return;
     await deleteFolder(id);
     if (selectedFolderId === id) {
-      onSelectFolder(undefined);
+      router.replace("/mypage");
     }
     onFoldersChange();
   }
 
   const itemBase =
-    "flex items-center justify-between rounded-md px-3 py-2 text-sm cursor-pointer transition-colors";
+    "flex items-center justify-between rounded-md px-3 py-2 text-sm cursor-pointer transition-colors no-underline";
   const itemActive = "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300";
   const itemInactive =
     "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700";
@@ -129,26 +130,26 @@ export default function FolderList({
       )}
 
       {/* All words */}
-      <div
-        onClick={() => onSelectFolder(undefined)}
+      <Link
+        href="/mypage"
         className={`${itemBase} ${selectedFolderId === undefined ? itemActive : itemInactive}`}
       >
         <span>전체</span>
         <span className="text-xs text-gray-400 dark:text-gray-500">
           {totalWordCount}
         </span>
-      </div>
+      </Link>
 
       {/* Uncategorized */}
-      <div
-        onClick={() => onSelectFolder(null)}
+      <Link
+        href="/mypage?folder=uncategorized"
         className={`${itemBase} ${selectedFolderId === null ? itemActive : itemInactive}`}
       >
         <span>미분류</span>
         <span className="text-xs text-gray-400 dark:text-gray-500">
           {uncategorizedCount}
         </span>
-      </div>
+      </Link>
 
       {/* Folder items */}
       {folders.map((f) => (
@@ -183,12 +184,12 @@ export default function FolderList({
             </div>
           ) : (
             <>
-              <span
-                className="min-w-0 flex-1 truncate"
-                onClick={() => onSelectFolder(f.id)}
+              <Link
+                href={`/mypage?folder=${f.id}`}
+                className="min-w-0 flex-1 truncate no-underline"
               >
                 {f.name}
-              </span>
+              </Link>
               <div className="flex shrink-0 items-center gap-1">
                 <span className="mr-1 text-xs text-gray-400 dark:text-gray-500">
                   {f._count.words}
