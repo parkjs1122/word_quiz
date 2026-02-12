@@ -9,5 +9,5 @@ export default async function QuizPage() {
 
   const words = await getQuizWords();
 
-  return <QuizClient initialWords={words} />;
+  return <QuizClient initialWords={words} userId={session.user.id} />;
 }
