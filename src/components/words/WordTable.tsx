@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { updateWord, deleteWord, deleteWords } from "@/actions/words";
 import { moveWordsToFolder } from "@/actions/folders";
 
@@ -41,9 +41,11 @@ export default function WordTable({ initialWords, folders = [], onRefresh }: Wor
   const [showMoveMenu, setShowMoveMenu] = useState(false);
   const [moving, setMoving] = useState(false);
 
-  useState(() => {
+  useEffect(() => {
     setWords(initialWords);
-  });
+    setPage(1);
+    setSelectedIds(new Set());
+  }, [initialWords]);
 
   const filteredWords = useMemo(() => {
     return words.filter((w) => {
