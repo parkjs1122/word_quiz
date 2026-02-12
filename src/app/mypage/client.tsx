@@ -34,9 +34,6 @@ export default function MyPageClient({
   uncategorizedCount,
 }: MyPageClientProps) {
   const router = useRouter();
-  const [words] = useState(initialWords);
-  const [folders] = useState(initialFolders);
-  const [uncatCount] = useState(uncategorizedCount);
   // undefined = all, null = uncategorized, string = specific folder
   const [selectedFolderId, setSelectedFolderId] = useState<
     string | null | undefined
@@ -44,8 +41,8 @@ export default function MyPageClient({
 
   const filteredWords =
     selectedFolderId === undefined
-      ? words
-      : words.filter((w) => w.folderId === selectedFolderId);
+      ? initialWords
+      : initialWords.filter((w) => w.folderId === selectedFolderId);
 
   function handleRefresh() {
     router.refresh();
@@ -57,7 +54,7 @@ export default function MyPageClient({
         ? "모든 단어"
         : selectedFolderId === null
           ? "미분류 단어"
-          : folders.find((f) => f.id === selectedFolderId)?.name + " 폴더의 단어";
+          : initialFolders.find((f) => f.id === selectedFolderId)?.name + " 폴더의 단어";
     if (!confirm(`${label}의 암기 상태를 초기화하시겠습니까?`)) return;
     await resetAllMemorized(selectedFolderId);
     router.refresh();
@@ -99,9 +96,9 @@ export default function MyPageClient({
         {/* Folder sidebar */}
         <div className="w-full shrink-0 md:w-48">
           <FolderList
-            folders={folders}
-            totalWordCount={words.length}
-            uncategorizedCount={uncatCount}
+            folders={initialFolders}
+            totalWordCount={initialWords.length}
+            uncategorizedCount={uncategorizedCount}
             selectedFolderId={selectedFolderId}
             onSelectFolder={setSelectedFolderId}
             onFoldersChange={handleRefresh}
@@ -123,12 +120,12 @@ export default function MyPageClient({
               단어 목록
               {selectedFolderId === null && " — 미분류"}
               {typeof selectedFolderId === "string" &&
-                ` — ${folders.find((f) => f.id === selectedFolderId)?.name}`}
+                ` — ${initialFolders.find((f) => f.id === selectedFolderId)?.name}`}
             </h2>
             <WordTable
-              key={selectedFolderId ?? "__all__"}
+              key={String(selectedFolderId)}
               initialWords={filteredWords}
-              folders={folders}
+              folders={initialFolders}
               onRefresh={handleRefresh}
             />
           </div>
