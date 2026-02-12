@@ -1,7 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, usePathname } from "next/navigation";
 import WordUpload from "@/components/words/WordUpload";
 import WordTable from "@/components/words/WordTable";
 import FolderList from "@/components/words/FolderList";
@@ -25,24 +24,31 @@ interface Word {
 interface MyPageClientProps {
   initialWords: Word[];
   initialFolders: Folder[];
+  totalWordCount: number;
   uncategorizedCount: number;
+  // undefined = all, null = uncategorized, string = specific folder
+  selectedFolderId: string | null | undefined;
 }
 
 export default function MyPageClient({
   initialWords,
   initialFolders,
+  totalWordCount,
   uncategorizedCount,
+  selectedFolderId,
 }: MyPageClientProps) {
   const router = useRouter();
-  // undefined = all, null = uncategorized, string = specific folder
-  const [selectedFolderId, setSelectedFolderId] = useState<
-    string | null | undefined
-  >(undefined);
+  const pathname = usePathname();
 
-  const filteredWords =
-    selectedFolderId === undefined
-      ? initialWords
-      : initialWords.filter((w) => w.folderId === selectedFolderId);
+  function handleSelectFolder(folderId: string | null | undefined) {
+    if (folderId === undefined) {
+      router.replace(pathname);
+    } else if (folderId === null) {
+      router.replace(`${pathname}?folder=uncategorized`);
+    } else {
+      router.replace(`${pathname}?folder=${folderId}`);
+    }
+  }
 
   function handleRefresh() {
     router.refresh();
@@ -97,10 +103,10 @@ export default function MyPageClient({
         <div className="w-full shrink-0 md:w-48">
           <FolderList
             folders={initialFolders}
-            totalWordCount={initialWords.length}
+            totalWordCount={totalWordCount}
             uncategorizedCount={uncategorizedCount}
             selectedFolderId={selectedFolderId}
-            onSelectFolder={setSelectedFolderId}
+            onSelectFolder={handleSelectFolder}
             onFoldersChange={handleRefresh}
           />
         </div>
@@ -123,8 +129,7 @@ export default function MyPageClient({
                 ` — ${initialFolders.find((f) => f.id === selectedFolderId)?.name}`}
             </h2>
             <WordTable
-              key={String(selectedFolderId)}
-              initialWords={filteredWords}
+              initialWords={initialWords}
               folders={initialFolders}
               onRefresh={handleRefresh}
             />
