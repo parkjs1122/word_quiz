@@ -126,6 +126,7 @@ export default function MyPageClient({
                 ` — ${folders.find((f) => f.id === selectedFolderId)?.name}`}
             </h2>
             <WordTable
+              key={selectedFolderId ?? "__all__"}
               initialWords={filteredWords}
               folders={folders}
               onRefresh={handleRefresh}
