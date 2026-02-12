@@ -4,10 +4,11 @@ import { useState, useRef } from "react";
 import { uploadWords } from "@/actions/words";
 
 interface WordUploadProps {
+  folderId?: string;
   onUploadComplete: () => void;
 }
 
-export default function WordUpload({ onUploadComplete }: WordUploadProps) {
+export default function WordUpload({ folderId, onUploadComplete }: WordUploadProps) {
   const [dragging, setDragging] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -20,7 +21,7 @@ export default function WordUpload({ onUploadComplete }: WordUploadProps) {
     const formData = new FormData();
     formData.append("file", file);
 
-    const result = await uploadWords(formData);
+    const result = await uploadWords(formData, folderId);
 
     if (result.error) {
       setMessage({ type: "error", text: result.error });

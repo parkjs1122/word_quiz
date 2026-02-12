@@ -7,11 +7,34 @@ export default async function MyPage() {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
-  const words = await prisma.word.findMany({
-    where: { userId: session.user.id },
-    orderBy: { createdAt: "desc" },
-    select: { id: true, word: true, meaning: true, memorized: true },
-  });
+  const userId = session.user.id;
 
-  return <MyPageClient initialWords={words} />;
+  const [words, folders, uncategorizedCount] = await Promise.all([
+    prisma.word.findMany({
+      where: { userId },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        word: true,
+        meaning: true,
+        memorized: true,
+        folderId: true,
+        folder: { select: { id: true, name: true } },
+      },
+    }),
+    prisma.folder.findMany({
+      where: { userId },
+      include: { _count: { select: { words: true } } },
+      orderBy: { createdAt: "asc" },
+    }),
+    prisma.word.count({ where: { userId, folderId: null } }),
+  ]);
+
+  return (
+    <MyPageClient
+      initialWords={words}
+      initialFolders={folders}
+      uncategorizedCount={uncategorizedCount}
+    />
+  );
 }

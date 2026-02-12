@@ -12,7 +12,7 @@ async function getUserId(): Promise<string> {
   return session.user.id;
 }
 
-export async function uploadWords(formData: FormData) {
+export async function uploadWords(formData: FormData, folderId?: string | null) {
   const userId = await getUserId();
   const file = formData.get("file") as File;
 
@@ -39,6 +39,7 @@ export async function uploadWords(formData: FormData) {
       meaning: w.meaning,
       memorized: false,
       userId,
+      folderId: folderId || null,
     })),
   });
 
@@ -89,45 +90,68 @@ export async function toggleMemorized(id: string, memorized: boolean) {
   });
 }
 
-export async function resetAllMemorized() {
+export async function resetAllMemorized(folderId?: string | null) {
   const userId = await getUserId();
 
+  const where: { userId: string; folderId?: string | null } = { userId };
+  if (folderId !== undefined) {
+    where.folderId = folderId;
+  }
+
   await prisma.word.updateMany({
-    where: { userId },
+    where,
     data: { memorized: false },
   });
 }
 
-export async function exportWords(): Promise<string> {
+export async function exportWords(folderId?: string | null): Promise<string> {
   const userId = await getUserId();
 
+  const where: { userId: string; folderId?: string | null } = { userId };
+  if (folderId !== undefined) {
+    where.folderId = folderId;
+  }
+
   const words = await prisma.word.findMany({
-    where: { userId },
+    where,
     orderBy: { createdAt: "asc" },
   });
 
   return words.map((w) => `${w.word}\t${w.meaning}`).join("\n");
 }
 
-export async function getWords(filter?: "all" | "memorized" | "unmemorized") {
+// folderId: string => specific folder, null => uncategorized, undefined => all
+export async function getWords(
+  filter?: "all" | "memorized" | "unmemorized",
+  folderId?: string | null
+) {
   const userId = await getUserId();
 
-  const where: { userId: string; memorized?: boolean } = { userId };
+  const where: { userId: string; memorized?: boolean; folderId?: string | null } = { userId };
   if (filter === "memorized") where.memorized = true;
   if (filter === "unmemorized") where.memorized = false;
+  if (folderId !== undefined) {
+    where.folderId = folderId;
+  }
 
   return prisma.word.findMany({
     where,
+    include: { folder: { select: { id: true, name: true } } },
     orderBy: { createdAt: "desc" },
   });
 }
 
-export async function getStats() {
+export async function getStats(folderId?: string | null) {
   const userId = await getUserId();
 
+  const where: { userId: string; folderId?: string | null } = { userId };
+  if (folderId !== undefined) {
+    where.folderId = folderId;
+  }
+
   const [total, memorized] = await Promise.all([
-    prisma.word.count({ where: { userId } }),
-    prisma.word.count({ where: { userId, memorized: true } }),
+    prisma.word.count({ where }),
+    prisma.word.count({ where: { ...where, memorized: true } }),
   ]);
 
   return {

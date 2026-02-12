@@ -4,32 +4,67 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import WordUpload from "@/components/words/WordUpload";
 import WordTable from "@/components/words/WordTable";
+import FolderList from "@/components/words/FolderList";
 import { resetAllMemorized, exportWords } from "@/actions/words";
+
+interface Folder {
+  id: string;
+  name: string;
+  _count: { words: number };
+}
 
 interface Word {
   id: string;
   word: string;
   meaning: string;
   memorized: boolean;
+  folderId: string | null;
+  folder: { id: string; name: string } | null;
 }
 
-export default function MyPageClient({ initialWords }: { initialWords: Word[] }) {
+interface MyPageClientProps {
+  initialWords: Word[];
+  initialFolders: Folder[];
+  uncategorizedCount: number;
+}
+
+export default function MyPageClient({
+  initialWords,
+  initialFolders,
+  uncategorizedCount,
+}: MyPageClientProps) {
   const router = useRouter();
-  const [words, setWords] = useState(initialWords);
+  const [words] = useState(initialWords);
+  const [folders] = useState(initialFolders);
+  const [uncatCount] = useState(uncategorizedCount);
+  // undefined = all, null = uncategorized, string = specific folder
+  const [selectedFolderId, setSelectedFolderId] = useState<
+    string | null | undefined
+  >(undefined);
+
+  const filteredWords =
+    selectedFolderId === undefined
+      ? words
+      : words.filter((w) => w.folderId === selectedFolderId);
 
   function handleRefresh() {
     router.refresh();
   }
 
   async function handleReset() {
-    if (!confirm("모든 단어의 암기 상태를 초기화하시겠습니까?")) return;
-    await resetAllMemorized();
-    setWords((prev) => prev.map((w) => ({ ...w, memorized: false })));
+    const label =
+      selectedFolderId === undefined
+        ? "모든 단어"
+        : selectedFolderId === null
+          ? "미분류 단어"
+          : folders.find((f) => f.id === selectedFolderId)?.name + " 폴더의 단어";
+    if (!confirm(`${label}의 암기 상태를 초기화하시겠습니까?`)) return;
+    await resetAllMemorized(selectedFolderId);
     router.refresh();
   }
 
   async function handleExport() {
-    const content = await exportWords();
+    const content = await exportWords(selectedFolderId);
     const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -41,7 +76,7 @@ export default function MyPageClient({ initialWords }: { initialWords: Word[] })
   }
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8">
+    <div className="mx-auto max-w-5xl px-4 py-8">
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-bold">마이페이지</h1>
         <div className="flex gap-2">
@@ -60,14 +95,43 @@ export default function MyPageClient({ initialWords }: { initialWords: Word[] })
         </div>
       </div>
 
-      <div className="mb-8">
-        <h2 className="mb-3 text-lg font-semibold">단어 업로드</h2>
-        <WordUpload onUploadComplete={handleRefresh} />
-      </div>
+      <div className="flex flex-col gap-6 md:flex-row">
+        {/* Folder sidebar */}
+        <div className="w-full shrink-0 md:w-48">
+          <FolderList
+            folders={folders}
+            totalWordCount={words.length}
+            uncategorizedCount={uncatCount}
+            selectedFolderId={selectedFolderId}
+            onSelectFolder={setSelectedFolderId}
+            onFoldersChange={handleRefresh}
+          />
+        </div>
 
-      <div>
-        <h2 className="mb-3 text-lg font-semibold">단어 목록</h2>
-        <WordTable initialWords={words} onRefresh={handleRefresh} />
+        {/* Main content */}
+        <div className="min-w-0 flex-1">
+          <div className="mb-6">
+            <h2 className="mb-3 text-lg font-semibold">단어 업로드</h2>
+            <WordUpload
+              folderId={typeof selectedFolderId === "string" ? selectedFolderId : undefined}
+              onUploadComplete={handleRefresh}
+            />
+          </div>
+
+          <div>
+            <h2 className="mb-3 text-lg font-semibold">
+              단어 목록
+              {selectedFolderId === null && " — 미분류"}
+              {typeof selectedFolderId === "string" &&
+                ` — ${folders.find((f) => f.id === selectedFolderId)?.name}`}
+            </h2>
+            <WordTable
+              initialWords={filteredWords}
+              folders={folders}
+              onRefresh={handleRefresh}
+            />
+          </div>
+        </div>
       </div>
     </div>
   );

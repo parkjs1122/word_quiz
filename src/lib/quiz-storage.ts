@@ -9,6 +9,7 @@ export interface SavedQuizSession {
   words: QuizWord[];
   currentIndex: number;
   memorizedCount: number;
+  folderIds?: string[];
   savedAt: number;
 }
 

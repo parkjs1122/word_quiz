@@ -3,14 +3,20 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-export async function getQuizWords() {
+export async function getQuizWords(folderIds?: string[]) {
   const session = await auth();
   if (!session?.user?.id) {
     throw new Error("인증이 필요합니다.");
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const where: any = { userId: session.user.id, memorized: false };
+  if (folderIds && folderIds.length > 0) {
+    where.folderId = { in: folderIds };
+  }
+
   const words = await prisma.word.findMany({
-    where: { userId: session.user.id, memorized: false },
+    where,
     select: { id: true, word: true, meaning: true, memorized: true },
   });
 

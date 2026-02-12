@@ -5,6 +5,7 @@ import Link from "next/link";
 import QuizCard from "@/components/quiz/QuizCard";
 import QuizProgress from "@/components/quiz/QuizProgress";
 import { toggleMemorized } from "@/actions/words";
+import { getQuizWords } from "@/actions/quiz";
 import {
   loadQuizSession,
   saveQuizSession,
@@ -19,16 +20,29 @@ interface Word {
   memorized: boolean;
 }
 
+interface QuizFolder {
+  id: string;
+  name: string;
+  wordCount: number;
+}
+
 interface QuizClientProps {
-  initialWords: Word[];
+  folders: QuizFolder[];
   userId: string;
 }
 
-export default function QuizClient({ initialWords, userId }: QuizClientProps) {
-  const [words, setWords] = useState<Word[]>(initialWords);
+export default function QuizClient({ folders, userId }: QuizClientProps) {
+  const [words, setWords] = useState<Word[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [memorizedCount, setMemorizedCount] = useState(0);
   const [finished, setFinished] = useState(false);
+  const [quizStarted, setQuizStarted] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const [selectedFolderIds, setSelectedFolderIds] = useState<Set<string>>(
+    new Set()
+  );
+  const [selectAll, setSelectAll] = useState(true);
 
   const [savedSession, setSavedSession] = useState<SavedQuizSession | null>(
     null
@@ -48,11 +62,27 @@ export default function QuizClient({ initialWords, userId }: QuizClientProps) {
 
   // Persist state to localStorage after each answer
   useEffect(() => {
-    if (!initialized || finished || showResumeModal) return;
+    if (!initialized || finished || showResumeModal || !quizStarted) return;
     if (words.length === 0) return;
 
-    saveQuizSession(userId, { words, currentIndex, memorizedCount });
-  }, [currentIndex, memorizedCount, finished, initialized, showResumeModal, words, userId]);
+    saveQuizSession(userId, {
+      words,
+      currentIndex,
+      memorizedCount,
+      folderIds: selectAll ? undefined : Array.from(selectedFolderIds),
+    });
+  }, [
+    currentIndex,
+    memorizedCount,
+    finished,
+    initialized,
+    showResumeModal,
+    quizStarted,
+    words,
+    userId,
+    selectAll,
+    selectedFolderIds,
+  ]);
 
   // Clear saved session when quiz finishes
   useEffect(() => {
@@ -66,6 +96,11 @@ export default function QuizClient({ initialWords, userId }: QuizClientProps) {
       setWords(savedSession.words);
       setCurrentIndex(savedSession.currentIndex);
       setMemorizedCount(savedSession.memorizedCount);
+      if (savedSession.folderIds) {
+        setSelectedFolderIds(new Set(savedSession.folderIds));
+        setSelectAll(false);
+      }
+      setQuizStarted(true);
     }
     setShowResumeModal(false);
   }
@@ -73,6 +108,39 @@ export default function QuizClient({ initialWords, userId }: QuizClientProps) {
   function handleStartNew() {
     clearQuizSession(userId);
     setShowResumeModal(false);
+  }
+
+  function toggleFolder(id: string) {
+    setSelectedFolderIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+    setSelectAll(false);
+  }
+
+  function handleSelectAll() {
+    setSelectAll(true);
+    setSelectedFolderIds(new Set());
+  }
+
+  async function handleStartQuiz() {
+    setLoading(true);
+    try {
+      const folderIds = selectAll ? undefined : Array.from(selectedFolderIds);
+      const quizWords = await getQuizWords(folderIds);
+      setWords(quizWords);
+      setCurrentIndex(0);
+      setMemorizedCount(0);
+      setFinished(false);
+      setQuizStarted(true);
+    } finally {
+      setLoading(false);
+    }
   }
 
   const total = words.length;
@@ -111,6 +179,94 @@ export default function QuizClient({ initialWords, userId }: QuizClientProps) {
               새로 시작
             </button>
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Folder selection screen
+  if (!quizStarted) {
+    return (
+      <div className="mx-auto max-w-lg px-4 py-16">
+        <div className="rounded-xl bg-white p-6 shadow-lg sm:p-8 dark:bg-gray-800">
+          <h2 className="mb-6 text-center text-xl font-bold text-gray-900 dark:text-white">
+            퀴즈 범위 선택
+          </h2>
+
+          <div className="space-y-2">
+            <button
+              onClick={handleSelectAll}
+              className={`flex w-full items-center justify-between rounded-lg border px-4 py-3 text-left transition-colors ${
+                selectAll
+                  ? "border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-900/30 dark:text-blue-300"
+                  : "border-gray-200 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700"
+              }`}
+            >
+              <span className="font-medium">전체 단어</span>
+              {selectAll && (
+                <svg
+                  className="h-5 w-5"
+                  fill="currentColor"
+                  viewBox="0 0 20 20"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              )}
+            </button>
+
+            {folders.length > 0 && (
+              <div className="py-2">
+                <p className="mb-2 px-1 text-xs font-medium text-gray-500 dark:text-gray-400">
+                  폴더별 선택
+                </p>
+                <div className="space-y-2">
+                  {folders.map((folder) => (
+                    <button
+                      key={folder.id}
+                      onClick={() => toggleFolder(folder.id)}
+                      className={`flex w-full items-center justify-between rounded-lg border px-4 py-3 text-left transition-colors ${
+                        selectedFolderIds.has(folder.id)
+                          ? "border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-900/30 dark:text-blue-300"
+                          : "border-gray-200 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700"
+                      }`}
+                    >
+                      <span className="font-medium">{folder.name}</span>
+                      <span className="flex items-center gap-2">
+                        <span className="text-sm opacity-60">
+                          {folder.wordCount}개
+                        </span>
+                        {selectedFolderIds.has(folder.id) && (
+                          <svg
+                            className="h-5 w-5"
+                            fill="currentColor"
+                            viewBox="0 0 20 20"
+                          >
+                            <path
+                              fillRule="evenodd"
+                              d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
+                        )}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <button
+            onClick={handleStartQuiz}
+            disabled={loading || (!selectAll && selectedFolderIds.size === 0)}
+            className="mt-6 w-full rounded-md bg-blue-600 px-6 py-3 font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {loading ? "불러오는 중..." : "퀴즈 시작"}
+          </button>
         </div>
       </div>
     );

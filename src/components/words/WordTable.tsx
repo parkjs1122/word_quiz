@@ -2,22 +2,32 @@
 
 import { useState, useMemo } from "react";
 import { updateWord, deleteWord, deleteWords } from "@/actions/words";
+import { moveWordsToFolder } from "@/actions/folders";
 
 const PAGE_SIZE = 50;
+
+interface Folder {
+  id: string;
+  name: string;
+  _count: { words: number };
+}
 
 interface Word {
   id: string;
   word: string;
   meaning: string;
   memorized: boolean;
+  folderId?: string | null;
+  folder?: { id: string; name: string } | null;
 }
 
 interface WordTableProps {
   initialWords: Word[];
+  folders?: Folder[];
   onRefresh: () => void;
 }
 
-export default function WordTable({ initialWords, onRefresh }: WordTableProps) {
+export default function WordTable({ initialWords, folders = [], onRefresh }: WordTableProps) {
   const [words, setWords] = useState(initialWords);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "memorized" | "unmemorized">("all");
@@ -28,6 +38,8 @@ export default function WordTable({ initialWords, onRefresh }: WordTableProps) {
   const [editMemorized, setEditMemorized] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
+  const [showMoveMenu, setShowMoveMenu] = useState(false);
+  const [moving, setMoving] = useState(false);
 
   useState(() => {
     setWords(initialWords);
@@ -136,6 +148,16 @@ export default function WordTable({ initialWords, onRefresh }: WordTableProps) {
     onRefresh();
   }
 
+  async function handleMoveToFolder(folderId: string | null) {
+    if (selectedIds.size === 0) return;
+    setMoving(true);
+    await moveWordsToFolder(Array.from(selectedIds), folderId);
+    setSelectedIds(new Set());
+    setShowMoveMenu(false);
+    setMoving(false);
+    onRefresh();
+  }
+
   // Build visible page numbers: always show first, last, current +/- 2, with ellipsis
   function getPageNumbers(): (number | "...")[] {
     if (totalPages <= 7) {
@@ -193,13 +215,45 @@ export default function WordTable({ initialWords, onRefresh }: WordTableProps) {
           )}
         </p>
         {selectedIds.size > 0 && (
-          <button
-            onClick={handleBulkDelete}
-            disabled={deleting}
-            className="rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
-          >
-            {deleting ? "삭제 중..." : `선택 삭제 (${selectedIds.size})`}
-          </button>
+          <div className="flex gap-2">
+            {folders.length > 0 && (
+              <div className="relative">
+                <button
+                  onClick={() => setShowMoveMenu(!showMoveMenu)}
+                  disabled={moving}
+                  className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+                >
+                  {moving ? "이동 중..." : "폴더 이동"}
+                </button>
+                {showMoveMenu && (
+                  <div className="absolute right-0 z-10 mt-1 w-44 rounded-md border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-gray-800">
+                    <button
+                      onClick={() => handleMoveToFolder(null)}
+                      className="block w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                    >
+                      미분류로 이동
+                    </button>
+                    {folders.map((f) => (
+                      <button
+                        key={f.id}
+                        onClick={() => handleMoveToFolder(f.id)}
+                        className="block w-full truncate px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                      >
+                        {f.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            <button
+              onClick={handleBulkDelete}
+              disabled={deleting}
+              className="rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+            >
+              {deleting ? "삭제 중..." : `선택 삭제 (${selectedIds.size})`}
+            </button>
+          </div>
         )}
       </div>
 
