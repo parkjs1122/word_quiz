@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import MyPageClient from "./client";
 
+export const dynamic = "force-dynamic";
+
 export default async function MyPage() {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
