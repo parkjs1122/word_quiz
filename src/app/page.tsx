@@ -1,6 +1,10 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { auth } from "@/lib/auth";
 
-export default function Home() {
+export default async function Home() {
+  const session = await auth();
+  if (session) redirect("/dashboard");
   return (
     <div className="mx-auto max-w-4xl px-4 py-10 text-center sm:py-16">
       <h1 className="mb-4 text-3xl font-bold tracking-tight text-gray-900 sm:text-5xl dark:text-white">
