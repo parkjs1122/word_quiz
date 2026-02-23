@@ -3,29 +3,54 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  passwordHash String   @map("password_hash")
-  createdAt    DateTime @default(now()) @map("created_at")
-  words        Word[]
-  folders      Folder[]
+  id            String    @id @default(cuid())
+  email         String    @unique
+  passwordHash  String?   @map("password_hash")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  words         Word[]
+  folders       Folder[]
+  quizHistories QuizHistory[]
+  accounts      Account[]
+  sharedFolders SharedFolder[]
 
   @@map("users")
 }
 
+model Account {
+  id                String  @id @default(cuid())
+  userId            String  @map("user_id")
+  type              String
+  provider          String
+  providerAccountId String  @map("provider_account_id")
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
 model Folder {
-  id        String   @id @default(cuid())
-  name      String
-  userId    String   @map("user_id")
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  words     Word[]
-  createdAt DateTime @default(now()) @map("created_at")
+  id           String        @id @default(cuid())
+  name         String
+  userId       String        @map("user_id")
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  words        Word[]
+  createdAt    DateTime      @default(now()) @map("created_at")
+  color        String?       @default("#3B82F6")
+  sortOrder    Int           @default(0) @map("sort_order")
+  sharedFolder SharedFolder?
 
   @@unique([userId, name])
   @@index([userId])
@@ -33,18 +58,60 @@ model Folder {
 }
 
 model Word {
-  id         String   @id @default(cuid())
-  word       String
-  meaning    String
-  memorized  Boolean  @default(false)
-  userId     String   @map("user_id")
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  folderId   String?  @map("folder_id")
-  folder     Folder?  @relation(fields: [folderId], references: [id], onDelete: SetNull)
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
+  id           String   @id @default(cuid())
+  word         String
+  meaning      String
+  memorized    Boolean  @default(false)
+  level        Int      @default(0)
+  nextReviewAt DateTime @default(now()) @map("next_review_at")
+  userId       String   @map("user_id")
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  folderId     String?  @map("folder_id")
+  folder       Folder?  @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
 
   @@index([userId, memorized])
+  @@index([userId, nextReviewAt])
   @@index([folderId])
   @@map("words")
+}
+
+model QuizHistory {
+  id           String   @id @default(cuid())
+  userId       String   @map("user_id")
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  quizDate     DateTime @map("quiz_date")
+  totalWords   Int      @map("total_words")
+  correctCount Int      @map("correct_count")
+  wrongCount   Int      @map("wrong_count")
+  quizMode     String   @default("normal") @map("quiz_mode")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([userId, quizDate])
+  @@map("quiz_histories")
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  email     String
+  token     String   @unique
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([email])
+  @@map("password_reset_tokens")
+}
+
+model SharedFolder {
+  id        String   @id @default(cuid())
+  folderId  String   @unique @map("folder_id")
+  folder    Folder   @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  token     String   @unique @default(cuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([token])
+  @@map("shared_folders")
 }

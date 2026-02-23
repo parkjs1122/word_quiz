@@ -71,8 +71,28 @@ export async function getFolders() {
   return prisma.folder.findMany({
     where: { userId },
     include: { _count: { select: { words: true } } },
-    orderBy: { createdAt: "asc" },
+    orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
   });
+}
+
+export async function updateFolderColor(id: string, color: string) {
+  const userId = await getUserId();
+  await prisma.folder.update({
+    where: { id, userId },
+    data: { color },
+  });
+}
+
+export async function reorderFolders(folderIds: string[]) {
+  const userId = await getUserId();
+  await prisma.$transaction(
+    folderIds.map((id, index) =>
+      prisma.folder.update({
+        where: { id, userId },
+        data: { sortOrder: index },
+      })
+    )
+  );
 }
 
 export async function moveWordsToFolder(

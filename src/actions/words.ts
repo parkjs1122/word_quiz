@@ -12,6 +12,32 @@ async function getUserId(): Promise<string> {
   return session.user.id;
 }
 
+export async function createWord(data: {
+  word: string;
+  meaning: string;
+  folderId?: string | null;
+}) {
+  const userId = await getUserId();
+  const trimmedWord = data.word.trim();
+  const trimmedMeaning = data.meaning.trim();
+  if (!trimmedWord || !trimmedMeaning) {
+    return { error: "단어와 뜻을 모두 입력해주세요." };
+  }
+
+  const word = await prisma.word.create({
+    data: {
+      word: trimmedWord,
+      meaning: trimmedMeaning,
+      memorized: false,
+      userId,
+      folderId: data.folderId ?? null,
+    },
+    include: { folder: { select: { id: true, name: true } } },
+  });
+
+  return { word };
+}
+
 export async function uploadWords(formData: FormData, folderId?: string | null) {
   const userId = await getUserId();
   const file = formData.get("file") as File;
@@ -81,13 +107,37 @@ export async function deleteWords(ids: string[]) {
   });
 }
 
+const SRS_INTERVALS = [0, 1, 3, 7, 14, 30]; // days
+
 export async function toggleMemorized(id: string, memorized: boolean) {
   const userId = await getUserId();
 
-  await prisma.word.update({
-    where: { id, userId },
-    data: { memorized },
-  });
+  if (memorized) {
+    const word = await prisma.word.findUnique({ where: { id, userId } });
+    if (!word) return;
+
+    const newLevel = Math.min(word.level + 1, 5);
+    const nextReview = new Date();
+    nextReview.setDate(nextReview.getDate() + SRS_INTERVALS[newLevel]);
+
+    await prisma.word.update({
+      where: { id, userId },
+      data: {
+        memorized: newLevel >= 5,
+        level: newLevel,
+        nextReviewAt: nextReview,
+      },
+    });
+  } else {
+    await prisma.word.update({
+      where: { id, userId },
+      data: {
+        memorized: false,
+        level: 0,
+        nextReviewAt: new Date(),
+      },
+    });
+  }
 }
 
 export async function resetAllMemorized(folderId?: string | null) {
@@ -100,7 +150,7 @@ export async function resetAllMemorized(folderId?: string | null) {
 
   await prisma.word.updateMany({
     where,
-    data: { memorized: false },
+    data: { memorized: false, level: 0, nextReviewAt: new Date() },
   });
 }
 

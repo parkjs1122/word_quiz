@@ -45,7 +45,7 @@ export default async function MyPage({
     prisma.folder.findMany({
       where: { userId },
       include: { _count: { select: { words: true } } },
-      orderBy: { createdAt: "asc" },
+      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
     }),
     prisma.word.count({ where: { userId } }),
     prisma.word.count({ where: { userId, folderId: null } }),

@@ -3,11 +3,19 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { createFolder, renameFolder, deleteFolder } from "@/actions/folders";
+import { createFolder, renameFolder, deleteFolder, updateFolderColor, reorderFolders } from "@/actions/folders";
+import { createShareLink } from "@/actions/sharing";
+import { showToast } from "@/lib/toast";
+
+const FOLDER_COLORS = [
+  "#3B82F6", "#EF4444", "#10B981", "#F59E0B",
+  "#8B5CF6", "#EC4899", "#F97316", "#6B7280",
+];
 
 interface Folder {
   id: string;
   name: string;
+  color?: string | null;
   _count: { words: number };
 }
 
@@ -15,7 +23,6 @@ interface FolderListProps {
   folders: Folder[];
   totalWordCount: number;
   uncategorizedCount: number;
-  // selectedFolderId: undefined = all, null = uncategorized, string = specific folder
   selectedFolderId: string | null | undefined;
   onFoldersChange: () => void;
 }
@@ -33,6 +40,7 @@ export default function FolderList({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [colorPickerId, setColorPickerId] = useState<string | null>(null);
 
   async function handleCreate() {
     if (!newName.trim()) return;
@@ -67,6 +75,39 @@ export default function FolderList({
       router.replace("/mypage");
     }
     onFoldersChange();
+  }
+
+  async function handleColorChange(id: string, color: string) {
+    await updateFolderColor(id, color);
+    setColorPickerId(null);
+    onFoldersChange();
+  }
+
+  async function handleMoveUp(index: number) {
+    if (index <= 0) return;
+    const newOrder = [...folders];
+    [newOrder[index - 1], newOrder[index]] = [newOrder[index], newOrder[index - 1]];
+    await reorderFolders(newOrder.map((f) => f.id));
+    onFoldersChange();
+  }
+
+  async function handleMoveDown(index: number) {
+    if (index >= folders.length - 1) return;
+    const newOrder = [...folders];
+    [newOrder[index], newOrder[index + 1]] = [newOrder[index + 1], newOrder[index]];
+    await reorderFolders(newOrder.map((f) => f.id));
+    onFoldersChange();
+  }
+
+  async function handleShare(folderId: string) {
+    const result = await createShareLink(folderId);
+    if ("error" in result) {
+      showToast("error", result.error!);
+      return;
+    }
+    const url = `${window.location.origin}/shared/${result.token}`;
+    await navigator.clipboard.writeText(url);
+    showToast("success", "공유 링크가 복사되었습니다.");
   }
 
   const itemBase =
@@ -152,76 +193,147 @@ export default function FolderList({
       </Link>
 
       {/* Folder items */}
-      {folders.map((f) => (
-        <div
-          key={f.id}
-          className={`${itemBase} ${selectedFolderId === f.id ? itemActive : itemInactive}`}
-        >
-          {editingId === f.id ? (
-            <div className="flex min-w-0 flex-1 gap-1" onClick={(e) => e.stopPropagation()}>
-              <input
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleRename(f.id)}
-                className="min-w-0 flex-1 rounded border border-gray-300 px-1 py-0.5 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                autoFocus
-              />
-              <button
-                onClick={() => handleRename(f.id)}
-                className="text-xs text-blue-600 hover:underline dark:text-blue-400"
-              >
-                저장
-              </button>
-              <button
-                onClick={() => {
-                  setEditingId(null);
-                  setError(null);
-                }}
-                className="text-xs text-gray-500 hover:underline"
-              >
-                취소
-              </button>
-            </div>
-          ) : (
-            <>
-              <Link
-                href={`/mypage?folder=${f.id}`}
-                className="min-w-0 flex-1 truncate no-underline"
-              >
-                {f.name}
-              </Link>
-              <div className="flex shrink-0 items-center gap-1">
-                <span className="mr-1 text-xs text-gray-400 dark:text-gray-500">
-                  {f._count.words}
-                </span>
+      {folders.map((f, index) => (
+        <div key={f.id}>
+          <div
+            className={`${itemBase} ${selectedFolderId === f.id ? itemActive : itemInactive}`}
+          >
+            {editingId === f.id ? (
+              <div className="flex min-w-0 flex-1 gap-1" onClick={(e) => e.stopPropagation()}>
+                <input
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleRename(f.id)}
+                  className="min-w-0 flex-1 rounded border border-gray-300 px-1 py-0.5 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                  autoFocus
+                />
                 <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setEditingId(f.id);
-                    setEditName(f.name);
+                  onClick={() => handleRename(f.id)}
+                  className="text-xs text-blue-600 hover:underline dark:text-blue-400"
+                >
+                  저장
+                </button>
+                <button
+                  onClick={() => {
+                    setEditingId(null);
                     setError(null);
                   }}
-                  className="rounded p-0.5 text-gray-400 hover:bg-gray-200 hover:text-gray-600 dark:hover:bg-gray-600 dark:hover:text-gray-300"
-                  title="이름 변경"
+                  className="text-xs text-gray-500 hover:underline"
                 >
-                  <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                  </svg>
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDelete(f.id, f.name);
-                  }}
-                  className="rounded p-0.5 text-gray-400 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/30 dark:hover:text-red-400"
-                  title="삭제"
-                >
-                  <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
+                  취소
                 </button>
               </div>
-            </>
+            ) : (
+              <>
+                <Link
+                  href={`/mypage?folder=${f.id}`}
+                  className="flex min-w-0 flex-1 items-center gap-1.5 truncate no-underline"
+                >
+                  <span
+                    className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+                    style={{ backgroundColor: f.color || "#3B82F6" }}
+                  />
+                  <span className="truncate">{f.name}</span>
+                </Link>
+                <div className="flex shrink-0 items-center gap-0.5">
+                  <span className="mr-1 text-xs text-gray-400 dark:text-gray-500">
+                    {f._count.words}
+                  </span>
+                  {/* Move arrows */}
+                  {folders.length > 1 && (
+                    <>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleMoveUp(index); }}
+                        disabled={index === 0}
+                        className="rounded p-0.5 text-gray-400 hover:bg-gray-200 disabled:opacity-30 dark:hover:bg-gray-600"
+                        title="위로"
+                      >
+                        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleMoveDown(index); }}
+                        disabled={index === folders.length - 1}
+                        className="rounded p-0.5 text-gray-400 hover:bg-gray-200 disabled:opacity-30 dark:hover:bg-gray-600"
+                        title="아래로"
+                      >
+                        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </button>
+                    </>
+                  )}
+                  {/* Color picker */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setColorPickerId(colorPickerId === f.id ? null : f.id);
+                    }}
+                    className="rounded p-0.5 text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600"
+                    title="색상 변경"
+                  >
+                    <span
+                      className="inline-block h-3 w-3 rounded-full border border-gray-300 dark:border-gray-500"
+                      style={{ backgroundColor: f.color || "#3B82F6" }}
+                    />
+                  </button>
+                  {/* Share */}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleShare(f.id); }}
+                    className="rounded p-0.5 text-gray-400 hover:bg-gray-200 hover:text-blue-600 dark:hover:bg-gray-600"
+                    title="공유"
+                  >
+                    <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                    </svg>
+                  </button>
+                  {/* Edit */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEditingId(f.id);
+                      setEditName(f.name);
+                      setError(null);
+                    }}
+                    className="rounded p-0.5 text-gray-400 hover:bg-gray-200 hover:text-gray-600 dark:hover:bg-gray-600 dark:hover:text-gray-300"
+                    title="이름 변경"
+                  >
+                    <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                    </svg>
+                  </button>
+                  {/* Delete */}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleDelete(f.id, f.name); }}
+                    className="rounded p-0.5 text-gray-400 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/30 dark:hover:text-red-400"
+                    title="삭제"
+                  >
+                    <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Color picker dropdown */}
+          {colorPickerId === f.id && (
+            <div className="mt-1 flex flex-wrap gap-1.5 rounded-md bg-gray-50 p-2 dark:bg-gray-800">
+              {FOLDER_COLORS.map((color) => (
+                <button
+                  key={color}
+                  onClick={() => handleColorChange(f.id, color)}
+                  className={`h-5 w-5 rounded-full border-2 transition-transform hover:scale-110 ${
+                    (f.color || "#3B82F6") === color
+                      ? "border-gray-800 dark:border-white"
+                      : "border-transparent"
+                  }`}
+                  style={{ backgroundColor: color }}
+                />
+              ))}
+            </div>
           )}
         </div>
       ))}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import { updateWord, deleteWord, deleteWords } from "@/actions/words";
+import { updateWord, deleteWord, deleteWords, createWord } from "@/actions/words";
 import { moveWordsToFolder } from "@/actions/folders";
 
 const PAGE_SIZE = 50;
@@ -24,10 +24,11 @@ interface Word {
 interface WordTableProps {
   initialWords: Word[];
   folders?: Folder[];
+  folderId?: string | null;
   onRefresh: () => void;
 }
 
-export default function WordTable({ initialWords, folders = [], onRefresh }: WordTableProps) {
+export default function WordTable({ initialWords, folders = [], folderId, onRefresh }: WordTableProps) {
   const [words, setWords] = useState(initialWords);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "memorized" | "unmemorized">("all");
@@ -40,6 +41,11 @@ export default function WordTable({ initialWords, folders = [], onRefresh }: Wor
   const [deleting, setDeleting] = useState(false);
   const [showMoveMenu, setShowMoveMenu] = useState(false);
   const [moving, setMoving] = useState(false);
+
+  // Inline add form
+  const [addWord, setAddWord] = useState("");
+  const [addMeaning, setAddMeaning] = useState("");
+  const [isAdding, setIsAdding] = useState(false);
 
   useEffect(() => {
     setWords(initialWords);
@@ -158,6 +164,25 @@ export default function WordTable({ initialWords, folders = [], onRefresh }: Wor
     setShowMoveMenu(false);
     setMoving(false);
     onRefresh();
+  }
+
+  async function handleAddWord() {
+    if (!addWord.trim() || !addMeaning.trim()) return;
+    setIsAdding(true);
+    try {
+      const result = await createWord({
+        word: addWord.trim(),
+        meaning: addMeaning.trim(),
+        folderId: folderId,
+      });
+      if ("error" in result) return;
+      setWords((prev) => [result.word, ...prev]);
+      setAddWord("");
+      setAddMeaning("");
+      onRefresh();
+    } finally {
+      setIsAdding(false);
+    }
   }
 
   // Build visible page numbers: always show first, last, current +/- 2, with ellipsis
@@ -294,6 +319,40 @@ export default function WordTable({ initialWords, folders = [], onRefresh }: Wor
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                {/* Inline add row */}
+                <tr className="bg-blue-50/50 dark:bg-blue-900/10">
+                  <td className="px-3 py-2 text-center">
+                    <span className="text-blue-400 text-lg">+</span>
+                  </td>
+                  <td className="px-4 py-2">
+                    <input
+                      value={addWord}
+                      onChange={(e) => setAddWord(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && handleAddWord()}
+                      placeholder="새 단어 입력..."
+                      className="w-full rounded border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                    />
+                  </td>
+                  <td className="px-4 py-2">
+                    <input
+                      value={addMeaning}
+                      onChange={(e) => setAddMeaning(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && handleAddWord()}
+                      placeholder="뜻 입력..."
+                      className="w-full rounded border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                    />
+                  </td>
+                  <td className="px-4 py-2" />
+                  <td className="px-4 py-2 text-center">
+                    <button
+                      onClick={handleAddWord}
+                      disabled={isAdding || !addWord.trim() || !addMeaning.trim()}
+                      className="rounded bg-blue-600 px-3 py-1 text-xs text-white hover:bg-blue-700 disabled:opacity-50"
+                    >
+                      {isAdding ? "..." : "추가"}
+                    </button>
+                  </td>
+                </tr>
                 {pagedWords.map((w) => (
                   <tr
                     key={w.id}
@@ -401,6 +460,32 @@ export default function WordTable({ initialWords, folders = [], onRefresh }: Wor
 
           {/* Mobile: Card layout */}
           <div className="space-y-2 sm:hidden">
+            {/* Mobile inline add */}
+            <div className="rounded-lg border border-dashed border-blue-300 bg-blue-50/50 p-3 dark:border-blue-700 dark:bg-blue-900/10">
+              <div className="space-y-2">
+                <input
+                  value={addWord}
+                  onChange={(e) => setAddWord(e.target.value)}
+                  placeholder="새 단어 입력..."
+                  className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                />
+                <input
+                  value={addMeaning}
+                  onChange={(e) => setAddMeaning(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleAddWord()}
+                  placeholder="뜻 입력..."
+                  className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                />
+                <button
+                  onClick={handleAddWord}
+                  disabled={isAdding || !addWord.trim() || !addMeaning.trim()}
+                  className="w-full rounded bg-blue-600 py-1.5 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {isAdding ? "추가 중..." : "단어 추가"}
+                </button>
+              </div>
+            </div>
+
             {/* Select all row */}
             <label className="flex items-center gap-2 rounded-md bg-gray-50 px-3 py-2 dark:bg-gray-800">
               <input

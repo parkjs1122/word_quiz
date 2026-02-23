@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import WordUpload from "@/components/words/WordUpload";
 import WordTable from "@/components/words/WordTable";
@@ -9,6 +10,7 @@ import { resetAllMemorized, exportWords } from "@/actions/words";
 interface Folder {
   id: string;
   name: string;
+  color?: string | null;
   _count: { words: number };
 }
 
@@ -38,6 +40,7 @@ export default function MyPageClient({
   selectedFolderId,
 }: MyPageClientProps) {
   const router = useRouter();
+  const [uploadOpen, setUploadOpen] = useState(false);
 
   function handleRefresh() {
     router.refresh();
@@ -67,6 +70,19 @@ export default function MyPageClient({
     URL.revokeObjectURL(url);
   }
 
+  function handleMobileFolderChange(value: string) {
+    if (value === "__all__") router.push("/mypage");
+    else if (value === "__uncategorized__") router.push("/mypage?folder=uncategorized");
+    else router.push(`/mypage?folder=${value}`);
+  }
+
+  const currentMobileValue =
+    selectedFolderId === undefined
+      ? "__all__"
+      : selectedFolderId === null
+        ? "__uncategorized__"
+        : selectedFolderId;
+
   return (
     <div className="mx-auto max-w-5xl px-4 py-8">
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -87,9 +103,26 @@ export default function MyPageClient({
         </div>
       </div>
 
+      {/* Mobile folder dropdown */}
+      <div className="mb-4 md:hidden">
+        <select
+          value={currentMobileValue}
+          onChange={(e) => handleMobileFolderChange(e.target.value)}
+          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+        >
+          <option value="__all__">전체 ({totalWordCount})</option>
+          <option value="__uncategorized__">미분류 ({uncategorizedCount})</option>
+          {initialFolders.map((f) => (
+            <option key={f.id} value={f.id}>
+              {f.name} ({f._count.words})
+            </option>
+          ))}
+        </select>
+      </div>
+
       <div className="flex flex-col gap-6 md:flex-row">
-        {/* Folder sidebar */}
-        <div className="w-full shrink-0 md:w-48">
+        {/* Folder sidebar - desktop only */}
+        <div className="hidden w-48 shrink-0 md:block">
           <FolderList
             folders={initialFolders}
             totalWordCount={totalWordCount}
@@ -101,12 +134,30 @@ export default function MyPageClient({
 
         {/* Main content */}
         <div className="min-w-0 flex-1">
+          {/* Collapsible upload section */}
           <div className="mb-6">
-            <h2 className="mb-3 text-lg font-semibold">단어 업로드</h2>
-            <WordUpload
-              folderId={typeof selectedFolderId === "string" ? selectedFolderId : undefined}
-              onUploadComplete={handleRefresh}
-            />
+            <button
+              onClick={() => setUploadOpen(!uploadOpen)}
+              className="flex w-full items-center justify-between rounded-lg border border-gray-200 px-4 py-3 text-left transition-colors hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800"
+            >
+              <span className="text-sm font-semibold">단어 업로드</span>
+              <svg
+                className={`h-4 w-4 text-gray-500 transition-transform ${uploadOpen ? "rotate-180" : ""}`}
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {uploadOpen && (
+              <div className="mt-2">
+                <WordUpload
+                  folderId={typeof selectedFolderId === "string" ? selectedFolderId : undefined}
+                  onUploadComplete={handleRefresh}
+                />
+              </div>
+            )}
           </div>
 
           <div>
@@ -119,6 +170,7 @@ export default function MyPageClient({
             <WordTable
               initialWords={initialWords}
               folders={initialFolders}
+              folderId={typeof selectedFolderId === "string" ? selectedFolderId : selectedFolderId === null ? null : undefined}
               onRefresh={handleRefresh}
             />
           </div>

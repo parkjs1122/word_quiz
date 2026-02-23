@@ -5,11 +5,15 @@ interface QuizWord {
   memorized: boolean;
 }
 
+export type QuizMode = "normal" | "reverse" | "multipleChoice";
+
 export interface SavedQuizSession {
   words: QuizWord[];
   currentIndex: number;
   memorizedCount: number;
   folderIds?: string[];
+  quizMode?: QuizMode;
+  wrongWords?: QuizWord[];
   savedAt: number;
 }
 

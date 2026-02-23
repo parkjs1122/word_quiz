@@ -9,7 +9,7 @@ interface Word {
   meaning: string;
 }
 
-interface QuizCardProps {
+interface QuizCardReverseProps {
   word: Word;
   showMeaning: boolean;
   manualReveal?: boolean;
@@ -17,13 +17,13 @@ interface QuizCardProps {
   onAnswer: (memorized: boolean) => void;
 }
 
-export default function QuizCard({
+export default function QuizCardReverse({
   word,
   showMeaning,
   manualReveal = false,
   onReveal,
   onAnswer,
-}: QuizCardProps) {
+}: QuizCardReverseProps) {
   const [countdown, setCountdown] = useState(3);
 
   useEffect(() => {
@@ -47,28 +47,33 @@ export default function QuizCard({
 
   return (
     <div className="mx-auto w-full max-w-lg rounded-xl bg-white p-8 shadow-lg dark:bg-gray-800">
-      {/* Word */}
+      {/* Meaning shown first */}
+      <div className="mb-2 text-center">
+        <p className="text-xs font-medium uppercase tracking-wide text-blue-500 dark:text-blue-400">
+          뜻
+        </p>
+      </div>
       <div className="mb-6 text-center">
-        <div className="flex items-center justify-center gap-2">
-          <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
-            {word.word}
-          </h2>
-          <TTSButton text={word.word} />
-        </div>
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+          {word.meaning}
+        </h2>
       </div>
 
-      {/* Meaning / Countdown / Manual Reveal */}
+      {/* Word reveal */}
       <div className="mb-8 flex min-h-[80px] items-center justify-center">
         {showMeaning ? (
-          <p className="animate-flip-in text-xl text-gray-700 dark:text-gray-300">
-            {word.meaning}
-          </p>
+          <div className="animate-flip-in flex items-center gap-2">
+            <p className="text-2xl font-semibold text-gray-700 dark:text-gray-300">
+              {word.word}
+            </p>
+            <TTSButton text={word.word} />
+          </div>
         ) : manualReveal ? (
           <button
             onClick={onReveal}
             className="rounded-lg border-2 border-blue-400 px-6 py-3 text-base font-medium text-blue-500 transition-colors hover:bg-blue-50 dark:border-blue-500 dark:text-blue-400 dark:hover:bg-blue-900/20"
           >
-            뜻 보기
+            단어 보기
           </button>
         ) : (
           <div className="flex flex-col items-center gap-2">
@@ -76,7 +81,7 @@ export default function QuizCard({
               {countdown}
             </div>
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              잠시 후 뜻이 표시됩니다
+              잠시 후 단어가 표시됩니다
             </p>
           </div>
         )}
