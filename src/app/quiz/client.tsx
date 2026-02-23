@@ -10,12 +10,12 @@ import { toggleMemorized } from "@/actions/words";
 import { getQuizWords, getReviewWords } from "@/actions/quiz";
 import { saveQuizResult } from "@/actions/quiz-history";
 import {
-  loadQuizSession,
-  saveQuizSession,
-  clearQuizSession,
+  loadQuizSessionFromDB,
+  saveQuizSessionToDB,
+  clearQuizSessionFromDB,
   type SavedQuizSession,
   type QuizMode,
-} from "@/lib/quiz-storage";
+} from "@/actions/quiz-session";
 
 interface Word {
   id: string;
@@ -67,20 +67,23 @@ export default function QuizClient({ folders, userId, reviewMode = false }: Quiz
 
   // Load saved session on mount
   useEffect(() => {
-    const saved = loadQuizSession(userId);
-    if (saved) {
-      setSavedSession(saved);
-      setShowResumeModal(true);
-    }
-    setInitialized(true);
+    loadQuizSessionFromDB().then((saved) => {
+      if (saved) {
+        setSavedSession(saved);
+        setShowResumeModal(true);
+      }
+      setInitialized(true);
+    }).catch(() => {
+      setInitialized(true);
+    });
   }, [userId]);
 
-  // Persist state to localStorage after each answer
+  // Persist state to DB after each answer
   useEffect(() => {
     if (!initialized || finished || showResumeModal || !quizStarted) return;
     if (words.length === 0) return;
 
-    saveQuizSession(userId, {
+    saveQuizSessionToDB({
       words,
       currentIndex,
       memorizedCount,
@@ -88,7 +91,7 @@ export default function QuizClient({ folders, userId, reviewMode = false }: Quiz
       quizMode,
       manualReveal,
       wrongWords,
-    });
+    }).catch(() => {});
   }, [
     currentIndex,
     memorizedCount,
@@ -108,7 +111,7 @@ export default function QuizClient({ folders, userId, reviewMode = false }: Quiz
   // Clear saved session and save result when quiz finishes
   useEffect(() => {
     if (finished && words.length > 0) {
-      clearQuizSession(userId);
+      clearQuizSessionFromDB().catch(() => {});
       saveQuizResult({
         totalWords: words.length,
         correctCount: memorizedCount,
@@ -162,8 +165,8 @@ export default function QuizClient({ folders, userId, reviewMode = false }: Quiz
         setSelectedFolderIds(new Set(savedSession.folderIds));
         setSelectAll(false);
       }
-      setQuizMode(savedSession.quizMode || "normal");
-      setManualReveal(savedSession.manualReveal ?? false);
+      setQuizMode(savedSession.quizMode);
+      setManualReveal(savedSession.manualReveal);
       if (savedSession.wrongWords) {
         setWrongWords(savedSession.wrongWords);
       }
@@ -173,7 +176,7 @@ export default function QuizClient({ folders, userId, reviewMode = false }: Quiz
   }
 
   function handleStartNew() {
-    clearQuizSession(userId);
+    clearQuizSessionFromDB().catch(() => {});
     setShowResumeModal(false);
   }
 

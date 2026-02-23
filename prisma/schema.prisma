@@ -17,6 +17,7 @@ model User {
   quizHistories QuizHistory[]
   accounts      Account[]
   sharedFolders SharedFolder[]
+  quizSession   QuizSession?
 
   @@map("users")
 }
@@ -114,4 +115,21 @@ model SharedFolder {
 
   @@index([token])
   @@map("shared_folders")
+}
+
+model QuizSession {
+  id             String   @id @default(cuid())
+  userId         String   @unique @map("user_id")
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  words          Json
+  currentIndex   Int      @map("current_index")
+  memorizedCount Int      @map("memorized_count")
+  folderIds      Json?    @map("folder_ids")
+  quizMode       String   @default("normal") @map("quiz_mode")
+  manualReveal   Boolean  @default(false) @map("manual_reveal")
+  wrongWords     Json?    @map("wrong_words")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@map("quiz_sessions")
 }
