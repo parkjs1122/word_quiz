@@ -13,6 +13,7 @@ export interface SavedQuizSession {
   memorizedCount: number;
   folderIds?: string[];
   quizMode?: QuizMode;
+  manualReveal?: boolean;
   wrongWords?: QuizWord[];
   savedAt: number;
 }

@@ -86,6 +86,7 @@ export default function QuizClient({ folders, userId, reviewMode = false }: Quiz
       memorizedCount,
       folderIds: selectAll ? undefined : Array.from(selectedFolderIds),
       quizMode,
+      manualReveal,
       wrongWords,
     });
   }, [
@@ -100,6 +101,7 @@ export default function QuizClient({ folders, userId, reviewMode = false }: Quiz
     selectAll,
     selectedFolderIds,
     quizMode,
+    manualReveal,
     wrongWords,
   ]);
 
@@ -160,9 +162,8 @@ export default function QuizClient({ folders, userId, reviewMode = false }: Quiz
         setSelectedFolderIds(new Set(savedSession.folderIds));
         setSelectAll(false);
       }
-      if (savedSession.quizMode) {
-        setQuizMode(savedSession.quizMode);
-      }
+      setQuizMode(savedSession.quizMode || "normal");
+      setManualReveal(savedSession.manualReveal ?? false);
       if (savedSession.wrongWords) {
         setWrongWords(savedSession.wrongWords);
       }
