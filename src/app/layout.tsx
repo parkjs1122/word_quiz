@@ -3,6 +3,7 @@ import "./globals.css";
 import Providers from "@/components/common/Providers";
 import Navbar from "@/components/common/Navbar";
 import ToastContainer from "@/components/common/Toast";
+import OfflineBanner from "@/components/common/OfflineBanner";
 
 export const metadata: Metadata = {
   title: "Word Quiz",
@@ -29,6 +30,7 @@ export default function RootLayout({
       <body className="min-h-screen bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-gray-100">
         <Providers>
           <Navbar />
+          <OfflineBanner />
           <main>{children}</main>
           <ToastContainer />
         </Providers>

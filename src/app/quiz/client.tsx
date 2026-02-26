@@ -16,6 +16,20 @@ import {
   type SavedQuizSession,
   type QuizMode,
 } from "@/actions/quiz-session";
+import { useOffline } from "@/lib/offline/context";
+import {
+  getLocalWords,
+  getLocalReviewWords,
+  getLocalFolders,
+  updateLocalWord,
+  addPendingAction,
+  saveQuizSessionToLocal,
+  loadQuizSessionFromLocal,
+  clearQuizSessionFromLocal,
+  type LocalFolder,
+} from "@/lib/offline/db";
+
+const SRS_INTERVALS = [0, 1, 3, 7, 14, 30];
 
 interface Word {
   id: string;
@@ -36,7 +50,18 @@ interface QuizClientProps {
   reviewMode?: boolean;
 }
 
-export default function QuizClient({ folders, userId, reviewMode = false }: QuizClientProps) {
+function fisherYatesShuffle<T>(arr: T[]): T[] {
+  const shuffled = [...arr];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+}
+
+export default function QuizClient({ folders: serverFolders, userId, reviewMode = false }: QuizClientProps) {
+  const { isOnline, isOfflineReady } = useOffline();
+
   const [words, setWords] = useState<Word[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [memorizedCount, setMemorizedCount] = useState(0);
@@ -65,25 +90,72 @@ export default function QuizClient({ folders, userId, reviewMode = false }: Quiz
   // Phase 1-4: Wrong answers
   const [wrongWords, setWrongWords] = useState<Word[]>([]);
 
+  // Offline: fallback folders from IndexedDB
+  const [offlineFolders, setOfflineFolders] = useState<QuizFolder[]>([]);
+
+  const folders = serverFolders.length > 0 ? serverFolders : offlineFolders;
+
+  // Load offline folders if server folders are empty (offline/cached page)
+  useEffect(() => {
+    if (serverFolders.length === 0 && !isOnline && isOfflineReady) {
+      getLocalFolders().then((localFolders: LocalFolder[]) => {
+        getLocalWords().then((allWords) => {
+          const folderWordCounts = new Map<string, number>();
+          for (const w of allWords) {
+            if (w.folderId) {
+              folderWordCounts.set(
+                w.folderId,
+                (folderWordCounts.get(w.folderId) || 0) + 1
+              );
+            }
+          }
+          setOfflineFolders(
+            localFolders.map((f) => ({
+              id: f.id,
+              name: f.name,
+              wordCount: folderWordCounts.get(f.id) || 0,
+            }))
+          );
+        });
+      });
+    }
+  }, [serverFolders.length, isOnline, isOfflineReady]);
+
   // Load saved session on mount
   useEffect(() => {
-    loadQuizSessionFromDB().then((saved) => {
-      if (saved) {
-        setSavedSession(saved);
-        setShowResumeModal(true);
+    async function loadSession() {
+      try {
+        if (isOnline) {
+          const saved = await loadQuizSessionFromDB();
+          if (saved) {
+            setSavedSession(saved);
+            setShowResumeModal(true);
+          }
+        } else {
+          // Offline: load from IndexedDB
+          const localSession = await loadQuizSessionFromLocal();
+          if (localSession) {
+            const saved = localSession as unknown as SavedQuizSession;
+            if (saved.words && saved.words.length > 0) {
+              setSavedSession(saved);
+              setShowResumeModal(true);
+            }
+          }
+        }
+      } catch {
+        // Ignore errors
       }
       setInitialized(true);
-    }).catch(() => {
-      setInitialized(true);
-    });
-  }, [userId]);
+    }
+    loadSession();
+  }, [userId, isOnline]);
 
-  // Persist state to DB after each answer
+  // Persist state after each answer
   useEffect(() => {
     if (!initialized || finished || showResumeModal || !quizStarted) return;
     if (words.length === 0) return;
 
-    saveQuizSessionToDB({
+    const sessionData = {
       words,
       currentIndex,
       memorizedCount,
@@ -91,7 +163,13 @@ export default function QuizClient({ folders, userId, reviewMode = false }: Quiz
       quizMode,
       manualReveal,
       wrongWords,
-    }).catch(() => {});
+    };
+
+    if (isOnline) {
+      saveQuizSessionToDB(sessionData).catch(() => {});
+    } else {
+      saveQuizSessionToLocal(sessionData).catch(() => {});
+    }
   }, [
     currentIndex,
     memorizedCount,
@@ -106,20 +184,32 @@ export default function QuizClient({ folders, userId, reviewMode = false }: Quiz
     quizMode,
     manualReveal,
     wrongWords,
+    isOnline,
   ]);
 
   // Clear saved session and save result when quiz finishes
   useEffect(() => {
     if (finished && words.length > 0) {
-      clearQuizSessionFromDB().catch(() => {});
-      saveQuizResult({
+      const resultData = {
         totalWords: words.length,
         correctCount: memorizedCount,
         wrongCount: words.length - memorizedCount,
         quizMode,
-      }).catch(() => {});
+      };
+
+      if (isOnline) {
+        clearQuizSessionFromDB().catch(() => {});
+        saveQuizResult(resultData).catch(() => {});
+      } else {
+        clearQuizSessionFromLocal().catch(() => {});
+        addPendingAction({
+          type: "QUIZ_RESULT",
+          payload: resultData,
+          createdAt: new Date().toISOString(),
+        }).catch(() => {});
+      }
     }
-  }, [finished, userId, words.length, memorizedCount, quizMode]);
+  }, [finished, userId, words.length, memorizedCount, quizMode, isOnline]);
 
   // Phase 1-2: Reset showMeaning when word changes
   useEffect(() => {
@@ -176,7 +266,11 @@ export default function QuizClient({ folders, userId, reviewMode = false }: Quiz
   }
 
   function handleStartNew() {
-    clearQuizSessionFromDB().catch(() => {});
+    if (isOnline) {
+      clearQuizSessionFromDB().catch(() => {});
+    } else {
+      clearQuizSessionFromLocal().catch(() => {});
+    }
     setShowResumeModal(false);
   }
 
@@ -202,9 +296,29 @@ export default function QuizClient({ folders, userId, reviewMode = false }: Quiz
     setLoading(true);
     try {
       const folderIds = selectAll ? undefined : Array.from(selectedFolderIds);
-      const quizWords = reviewMode
-        ? await getReviewWords(folderIds)
-        : await getQuizWords(folderIds);
+
+      let quizWords: Word[];
+
+      if (isOnline) {
+        quizWords = reviewMode
+          ? await getReviewWords(folderIds)
+          : await getQuizWords(folderIds);
+      } else {
+        // Offline: load from IndexedDB
+        const localWords = reviewMode
+          ? await getLocalReviewWords(folderIds)
+          : await getLocalWords(folderIds, false);
+
+        quizWords = fisherYatesShuffle(
+          localWords.map((w) => ({
+            id: w.id,
+            word: w.word,
+            meaning: w.meaning,
+            memorized: w.memorized,
+          }))
+        );
+      }
+
       setWords(quizWords);
       setCurrentIndex(0);
       setMemorizedCount(0);
@@ -221,10 +335,31 @@ export default function QuizClient({ folders, userId, reviewMode = false }: Quiz
 
   async function handleAnswer(memorized: boolean) {
     if (memorized) {
-      try {
-        await toggleMemorized(currentWord.id, true);
-      } catch {
-        // Word may have been deleted — continue quiz
+      if (isOnline) {
+        try {
+          await toggleMemorized(currentWord.id, true);
+        } catch {
+          // Word may have been deleted — continue quiz
+        }
+      } else {
+        // Offline: update local word + queue pending action
+        const now = new Date();
+        // We don't know the current level offline, so estimate level+1
+        // The sync will call toggleMemorized which handles levels properly
+        const nextReview = new Date(now);
+        nextReview.setDate(nextReview.getDate() + SRS_INTERVALS[1]);
+
+        updateLocalWord(currentWord.id, {
+          memorized: false, // Only becomes true at level 5 on server
+          level: 1,
+          nextReviewAt: nextReview.toISOString(),
+        }).catch(() => {});
+
+        addPendingAction({
+          type: "TOGGLE_MEMORIZED",
+          payload: { wordId: currentWord.id, memorized: true },
+          createdAt: new Date().toISOString(),
+        }).catch(() => {});
       }
       setMemorizedCount((prev) => prev + 1);
     } else {
@@ -244,13 +379,7 @@ export default function QuizClient({ folders, userId, reviewMode = false }: Quiz
   }
 
   function handleRetryWrong() {
-    // Shuffle wrong words
-    const shuffled = [...wrongWords];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
-    setWords(shuffled);
+    setWords(fisherYatesShuffle(wrongWords));
     setCurrentIndex(0);
     setMemorizedCount(0);
     setFinished(false);
@@ -258,9 +387,28 @@ export default function QuizClient({ folders, userId, reviewMode = false }: Quiz
     setShowMeaning(false);
   }
 
-  // Wait until localStorage check completes
+  // Wait until session check completes
   if (!initialized) {
     return null;
+  }
+
+  // Offline but no data prepared
+  if (!isOnline && !isOfflineReady && !quizStarted) {
+    return (
+      <div className="mx-auto max-w-lg px-4 py-16 text-center">
+        <div className="mb-4 text-6xl">📡</div>
+        <h1 className="mb-2 text-2xl font-bold">오프라인 데이터 없음</h1>
+        <p className="mb-6 text-gray-600 dark:text-gray-400">
+          인터넷에 연결한 후 대시보드에서 &quot;오프라인 준비&quot;를 눌러주세요.
+        </p>
+        <Link
+          href="/dashboard"
+          className="inline-block rounded-md bg-blue-600 px-6 py-3 text-white hover:bg-blue-700"
+        >
+          대시보드로 이동
+        </Link>
+      </div>
+    );
   }
 
   // Resume prompt

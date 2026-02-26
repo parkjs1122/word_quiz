@@ -7,6 +7,7 @@ import LearningGraph from "@/components/dashboard/LearningGraph";
 import StreakCalendar from "@/components/dashboard/StreakCalendar";
 import FolderStats from "@/components/dashboard/FolderStats";
 import OnboardingOverlay from "@/components/common/OnboardingOverlay";
+import PrepareOfflineButton from "@/components/offline/PrepareOfflineButton";
 
 export const dynamic = "force-dynamic";
 
@@ -159,6 +160,9 @@ export default async function DashboardPage() {
               단어 관리
             </Link>
           </div>
+
+          {/* Offline preparation */}
+          <PrepareOfflineButton />
 
           {/* Stats grid */}
           <div className="mt-8 space-y-4">
