@@ -28,6 +28,55 @@ export async function saveQuizResult(data: {
   });
 }
 
+/**
+ * 오늘의 퀴즈 진행 상황을 저장/업데이트합니다.
+ * 매 답변마다 호출되어 퀴즈를 끝까지 완료하지 않아도 캘린더에 기록됩니다.
+ */
+export async function saveQuizProgress(data: {
+  totalAnswered: number;
+  correctCount: number;
+  wrongCount: number;
+  quizMode: string;
+}) {
+  const session = await auth();
+  if (!session?.user?.id) throw new Error("인증이 필요합니다.");
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // 오늘 같은 모드의 기존 레코드를 찾아 업데이트, 없으면 생성
+  const existing = await prisma.quizHistory.findFirst({
+    where: {
+      userId: session.user.id,
+      quizDate: today,
+      quizMode: data.quizMode,
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  if (existing) {
+    await prisma.quizHistory.update({
+      where: { id: existing.id },
+      data: {
+        totalWords: data.totalAnswered,
+        correctCount: data.correctCount,
+        wrongCount: data.wrongCount,
+      },
+    });
+  } else {
+    await prisma.quizHistory.create({
+      data: {
+        userId: session.user.id,
+        quizDate: today,
+        totalWords: data.totalAnswered,
+        correctCount: data.correctCount,
+        wrongCount: data.wrongCount,
+        quizMode: data.quizMode,
+      },
+    });
+  }
+}
+
 export async function getQuizHistoryLast30Days() {
   const session = await auth();
   if (!session?.user?.id) throw new Error("인증이 필요합니다.");

@@ -20,7 +20,7 @@ export interface LocalFolder {
 
 export interface PendingAction {
   id?: number; // autoIncrement
-  type: "TOGGLE_MEMORIZED" | "QUIZ_RESULT" | "CLEAR_SESSION";
+  type: "TOGGLE_MEMORIZED" | "QUIZ_RESULT" | "QUIZ_PROGRESS" | "CLEAR_SESSION";
   payload: Record<string, unknown>;
   createdAt: string;
 }

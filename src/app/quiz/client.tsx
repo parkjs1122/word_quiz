@@ -17,7 +17,7 @@ import QuizCardMultipleChoice from "@/components/quiz/QuizCardMultipleChoice";
 import QuizProgress from "@/components/quiz/QuizProgress";
 import { toggleMemorized } from "@/actions/words";
 import { getQuizWords, getReviewWords } from "@/actions/quiz";
-import { saveQuizResult } from "@/actions/quiz-history";
+import { saveQuizProgress } from "@/actions/quiz-history";
 import {
   loadQuizSessionFromDB,
   saveQuizSessionToDB,
@@ -197,29 +197,17 @@ export default function QuizClient({ folders: serverFolders, userId, reviewMode 
     isOnline,
   ]);
 
-  // Clear saved session and save result when quiz finishes
+  // Clear saved session when quiz finishes
+  // (퀴즈 결과는 handleAnswer에서 매 답변마다 저장됨)
   useEffect(() => {
     if (finished && words.length > 0) {
-      const resultData = {
-        totalWords: words.length,
-        correctCount: memorizedCount,
-        wrongCount: words.length - memorizedCount,
-        quizMode,
-      };
-
       if (isOnline) {
         clearQuizSessionFromDB().catch(() => {});
-        saveQuizResult(resultData).catch(() => {});
       } else {
         clearQuizSessionFromLocal().catch(() => {});
-        addPendingAction({
-          type: "QUIZ_RESULT",
-          payload: resultData,
-          createdAt: new Date().toISOString(),
-        }).catch(() => {});
       }
     }
-  }, [finished, userId, words.length, memorizedCount, quizMode, isOnline]);
+  }, [finished, words.length, isOnline]);
 
   // Phase 1-2: Reset showMeaning when word changes
   useEffect(() => {
@@ -344,6 +332,9 @@ export default function QuizClient({ folders: serverFolders, userId, reviewMode 
   const currentWord = words[currentIndex];
 
   async function handleAnswer(memorized: boolean) {
+    const newCorrectCount = memorized ? memorizedCount + 1 : memorizedCount;
+    const answeredCount = currentIndex + 1;
+
     if (memorized) {
       if (isOnline) {
         try {
@@ -378,6 +369,27 @@ export default function QuizClient({ folders: serverFolders, userId, reviewMode 
       setMemorizedCount((prev) => prev + 1);
     } else {
       setWrongWords((prev) => [...prev, currentWord]);
+    }
+
+    // 매 답변마다 퀴즈 진행 상황 저장 (캘린더에 바로 반영)
+    if (isOnline) {
+      saveQuizProgress({
+        totalAnswered: answeredCount,
+        correctCount: newCorrectCount,
+        wrongCount: answeredCount - newCorrectCount,
+        quizMode,
+      }).catch(() => {});
+    } else {
+      addPendingAction({
+        type: "QUIZ_PROGRESS",
+        payload: {
+          totalAnswered: answeredCount,
+          correctCount: newCorrectCount,
+          wrongCount: answeredCount - newCorrectCount,
+          quizMode,
+        },
+        createdAt: new Date().toISOString(),
+      }).catch(() => {});
     }
 
     if (currentIndex + 1 >= total) {
