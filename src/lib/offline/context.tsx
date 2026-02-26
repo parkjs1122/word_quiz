@@ -77,13 +77,15 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  // Auto-sync when coming back online
+  // Auto-sync when coming back online (with retry)
   useEffect(() => {
     if (!isOnline || pendingCount === 0) return;
 
     let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout>;
 
     async function doSync() {
+      if (cancelled) return;
       setIsSyncing(true);
       try {
         await syncPendingActions((current, total) => {
@@ -92,7 +94,7 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
           }
         });
       } catch {
-        // Sync failed, will retry next time
+        // Sync failed
       } finally {
         if (!cancelled) {
           setIsSyncing(false);
@@ -100,11 +102,21 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
           await refreshOfflineStatus();
         }
       }
+
+      // Check if there are remaining actions (partial sync)
+      if (!cancelled) {
+        const remaining = await getPendingActions();
+        if (remaining.length > 0) {
+          // Retry after 10 seconds
+          retryTimer = setTimeout(doSync, 10_000);
+        }
+      }
     }
 
     doSync();
     return () => {
       cancelled = true;
+      clearTimeout(retryTimer);
     };
   }, [isOnline, pendingCount, refreshOfflineStatus]);
 

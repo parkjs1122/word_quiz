@@ -3,6 +3,15 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import QuizCard from "@/components/quiz/QuizCard";
+
+/** Offline-safe link: uses <a> (full page nav) when offline, <Link> (SPA nav) when online */
+function OfflineLink({ href, className, children }: { href: string; className?: string; children: React.ReactNode }) {
+  const { isOnline } = useOffline();
+  if (!isOnline) {
+    return <a href={href} className={className}>{children}</a>;
+  }
+  return <Link href={href} className={className}>{children}</Link>;
+}
 import QuizCardReverse from "@/components/quiz/QuizCardReverse";
 import QuizCardMultipleChoice from "@/components/quiz/QuizCardMultipleChoice";
 import QuizProgress from "@/components/quiz/QuizProgress";
@@ -26,6 +35,7 @@ import {
   saveQuizSessionToLocal,
   loadQuizSessionFromLocal,
   clearQuizSessionFromLocal,
+  getLocalWordById,
   type LocalFolder,
 } from "@/lib/offline/db";
 
@@ -342,18 +352,22 @@ export default function QuizClient({ folders: serverFolders, userId, reviewMode 
           // Word may have been deleted — continue quiz
         }
       } else {
-        // Offline: update local word + queue pending action
-        const now = new Date();
-        // We don't know the current level offline, so estimate level+1
-        // The sync will call toggleMemorized which handles levels properly
-        const nextReview = new Date(now);
-        nextReview.setDate(nextReview.getDate() + SRS_INTERVALS[1]);
+        // Offline: read actual level, compute SRS locally, queue for sync
+        try {
+          const localWord = await getLocalWordById(currentWord.id);
+          const currentLevel = localWord?.level ?? 0;
+          const newLevel = Math.min(currentLevel + 1, 5);
+          const nextReview = new Date();
+          nextReview.setDate(nextReview.getDate() + SRS_INTERVALS[newLevel]);
 
-        updateLocalWord(currentWord.id, {
-          memorized: false, // Only becomes true at level 5 on server
-          level: 1,
-          nextReviewAt: nextReview.toISOString(),
-        }).catch(() => {});
+          await updateLocalWord(currentWord.id, {
+            memorized: newLevel >= 5,
+            level: newLevel,
+            nextReviewAt: nextReview.toISOString(),
+          });
+        } catch {
+          // Continue quiz even if local update fails
+        }
 
         addPendingAction({
           type: "TOGGLE_MEMORIZED",
@@ -401,12 +415,12 @@ export default function QuizClient({ folders: serverFolders, userId, reviewMode 
         <p className="mb-6 text-gray-600 dark:text-gray-400">
           인터넷에 연결한 후 대시보드에서 &quot;오프라인 준비&quot;를 눌러주세요.
         </p>
-        <Link
+        <OfflineLink
           href="/dashboard"
           className="inline-block rounded-md bg-blue-600 px-6 py-3 text-white hover:bg-blue-700"
         >
           대시보드로 이동
-        </Link>
+        </OfflineLink>
       </div>
     );
   }
@@ -610,12 +624,12 @@ export default function QuizClient({ folders: serverFolders, userId, reviewMode 
         <p className="mb-6 text-gray-600 dark:text-gray-400">
           모든 단어를 암기했거나 아직 단어를 업로드하지 않았습니다.
         </p>
-        <Link
+        <OfflineLink
           href="/mypage"
           className="inline-block rounded-md bg-blue-600 px-6 py-3 text-white hover:bg-blue-700"
         >
           마이페이지에서 단어 업로드
-        </Link>
+        </OfflineLink>
       </div>
     );
   }
@@ -674,18 +688,18 @@ export default function QuizClient({ folders: serverFolders, userId, reviewMode 
               틀린 단어만 다시 ({wrongWords.length}개)
             </button>
           )}
-          <Link
+          <OfflineLink
             href="/quiz"
             className="rounded-md bg-blue-600 px-6 py-3 text-center text-white hover:bg-blue-700"
           >
             다시 하기
-          </Link>
-          <Link
+          </OfflineLink>
+          <OfflineLink
             href="/mypage"
             className="rounded-md border border-gray-300 px-6 py-3 text-center hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-800"
           >
             마이페이지
-          </Link>
+          </OfflineLink>
         </div>
       </div>
     );

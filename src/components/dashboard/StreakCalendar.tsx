@@ -1,30 +1,38 @@
 "use client";
 
 interface StreakCalendarProps {
-  activeDates: string[]; // ISO date strings (YYYY-MM-DD)
+  activeDates: string[]; // 로컬 타임존 기준 YYYY-MM-DD
   streak: number;
+  todayStr: string; // 서버에서 전달받은 오늘 날짜 (YYYY-MM-DD)
+}
+
+function toLocalDateString(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 export default function StreakCalendar({
   activeDates,
   streak,
+  todayStr,
 }: StreakCalendarProps) {
   const activeSet = new Set(activeDates);
 
-  // Generate last 91 days (13 weeks)
+  // Generate last 91 days (13 weeks) based on server-provided today
   const days: { date: string; active: boolean }[] = [];
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const today = new Date(todayStr + "T00:00:00");
 
   for (let i = 90; i >= 0; i--) {
     const d = new Date(today);
     d.setDate(d.getDate() - i);
-    const dateStr = d.toISOString().slice(0, 10);
+    const dateStr = toLocalDateString(d);
     days.push({ date: dateStr, active: activeSet.has(dateStr) });
   }
 
   // Pad start to align with day of week (Monday = 0)
-  const firstDay = new Date(days[0].date);
+  const firstDay = new Date(days[0].date + "T00:00:00");
   const startDow = (firstDay.getDay() + 6) % 7; // Monday=0
   const padded = [
     ...Array.from({ length: startDow }, () => null),

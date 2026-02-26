@@ -2,6 +2,7 @@
 
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { toLocalDateString } from "@/lib/date-utils";
 
 export async function saveQuizResult(data: {
   totalWords: number;
@@ -62,5 +63,5 @@ export async function getQuizDatesLast90Days() {
     orderBy: { quizDate: "desc" },
   });
 
-  return results.map((r) => r.quizDate.toISOString().slice(0, 10));
+  return results.map((r) => toLocalDateString(r.quizDate));
 }

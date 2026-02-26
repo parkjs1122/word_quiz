@@ -131,6 +131,23 @@ export async function getLocalReviewWords(
   });
 }
 
+export async function getLocalWordById(
+  id: string
+): Promise<LocalWord | null> {
+  const db = await openDB();
+  const tx = db.transaction("words", "readonly");
+  const store = tx.objectStore("words");
+
+  return new Promise((resolve, reject) => {
+    const request = store.get(id);
+    request.onsuccess = () => {
+      db.close();
+      resolve(request.result ?? null);
+    };
+    request.onerror = () => { db.close(); reject(request.error); };
+  });
+}
+
 export async function updateLocalWord(
   id: string,
   changes: Partial<LocalWord>

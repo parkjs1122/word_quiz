@@ -35,6 +35,11 @@ export default function PrepareOfflineButton() {
     setLoading(true);
     setDone(false);
     try {
+      // Request persistent storage so browser won't evict IndexedDB
+      if (navigator.storage?.persist) {
+        await navigator.storage.persist().catch(() => {});
+      }
+
       const data = await getOfflineData();
 
       await saveWordsToLocal(

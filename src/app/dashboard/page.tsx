@@ -1,6 +1,7 @@
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { toLocalDateString } from "@/lib/date-utils";
 import Link from "next/link";
 import StatsCard from "@/components/dashboard/StatsCard";
 import LearningGraph from "@/components/dashboard/LearningGraph";
@@ -67,7 +68,7 @@ export default async function DashboardPage() {
   // Aggregate quiz history by day
   const dailyMap = new Map<string, { correct: number; wrong: number }>();
   for (const h of quizHistory) {
-    const dateStr = h.quizDate.toISOString().slice(0, 10);
+    const dateStr = toLocalDateString(h.quizDate);
     const existing = dailyMap.get(dateStr) || { correct: 0, wrong: 0 };
     existing.correct += h.correctCount;
     existing.wrong += h.wrongCount;
@@ -79,9 +80,7 @@ export default async function DashboardPage() {
   }));
 
   // Calendar active dates
-  const activeDates = quizDates.map((d) =>
-    d.quizDate.toISOString().slice(0, 10)
-  );
+  const activeDates = quizDates.map((d) => toLocalDateString(d.quizDate));
 
   // Calculate streak
   const activeDateSet = new Set(activeDates);
@@ -90,14 +89,17 @@ export default async function DashboardPage() {
   today.setHours(0, 0, 0, 0);
   const checkDate = new Date(today);
 
-  // Check if studied today first
-  if (activeDateSet.has(checkDate.toISOString().slice(0, 10))) {
+  // Check if studied today; if not, start counting from yesterday
+  const studiedToday = activeDateSet.has(toLocalDateString(checkDate));
+  if (studiedToday) {
     streak = 1;
     checkDate.setDate(checkDate.getDate() - 1);
-    while (activeDateSet.has(checkDate.toISOString().slice(0, 10))) {
-      streak++;
-      checkDate.setDate(checkDate.getDate() - 1);
-    }
+  } else {
+    checkDate.setDate(checkDate.getDate() - 1);
+  }
+  while (activeDateSet.has(toLocalDateString(checkDate))) {
+    streak++;
+    checkDate.setDate(checkDate.getDate() - 1);
   }
 
   // Folder stats with memorized counts
@@ -166,7 +168,11 @@ export default async function DashboardPage() {
 
           {/* Stats grid */}
           <div className="mt-8 space-y-4">
-            <StreakCalendar activeDates={activeDates} streak={streak} />
+            <StreakCalendar
+              activeDates={activeDates}
+              streak={streak}
+              todayStr={toLocalDateString(today)}
+            />
             <LearningGraph data={graphData} />
             <FolderStats folders={folderStats} />
           </div>
